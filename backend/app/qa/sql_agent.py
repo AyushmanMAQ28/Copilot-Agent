@@ -22,7 +22,7 @@ import duckdb
 
 from .ingest import ROW_ID, quote_identifier, quote_literal
 from .llm import LLMClient, LLMUnavailable
-from .schema import SchemaCard, TableCard, is_numeric
+from .schema import ColumnCard, SchemaCard, TableCard, is_numeric
 
 logger = logging.getLogger(__name__)
 
@@ -292,15 +292,26 @@ def _group_tokens(question: str) -> list[set[str]]:
     return tails
 
 
+def _names_a_value(column: ColumnCard, flattened: str) -> bool:
+    """True when the question quotes one of the column's own values."""
+    return any(len(_flatten(value).strip()) >= 3 and f" {_flatten(value).strip()} " in flattened
+               for value, _ in column.top_values)
+
+
 def _group_candidates(table: TableCard, question: str, tokens: set[str]) -> list[str]:
     """Columns that could be the GROUP BY key, most explicit first."""
-    found: list[str] = []
+    flattened = _flatten(question)
+    explicit: list[str] = []
     for tail in _group_tokens(question):
-        found.extend(column.name for column in table.columns
-                     if _name_score(column.name, tail) >= 0.999 and column.distinct_count <= 200)
+        explicit.extend(column.name for column in table.columns
+                        if _name_score(column.name, tail) >= 0.999 and column.distinct_count <= 200)
+    found = list(explicit)
     for name in _mentioned_columns(table, tokens):
         column = table.column(name)
-        if column and not is_numeric(column.dtype) and 1 < column.distinct_count <= 50:
+        if column is None or is_numeric(column.dtype) or not 1 < column.distinct_count <= 50:
+            continue
+        # "how many orders used the Partner channel" filters on a value; it does not group
+        if name in explicit or not _names_a_value(column, flattened):
             found.append(name)
     return list(dict.fromkeys(found))
 
