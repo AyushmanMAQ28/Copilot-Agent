@@ -1,0 +1,4 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+* { box-sizing: border-box; } body { margin: 0; font-family: Inter, ui-sans-serif, system-ui, sans-serif; background: #f8fafc; } button, textarea { font: inherit; } button { cursor: pointer; } button:focus-visible, textarea:focus-visible { outline: 3px solid #60a5fa; outline-offset: 2px; }
