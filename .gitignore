@@ -5,7 +5,3 @@ __pycache__/
 *.py[cod]
 backend/data/
 backend/uploads/
-frontend/node_modules/
-frontend/.next/
-frontend/dist/
-frontend/tsconfig.tsbuildinfo

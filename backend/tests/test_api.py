@@ -25,6 +25,15 @@ def test_health_works_without_llm_key(monkeypatch, tmp_path):
     assert response.json() == {"status": "ok"}
 
 
+def test_root_serves_static_index(monkeypatch, tmp_path):
+    with TestClient(load_app(monkeypatch, tmp_path)) as client:
+        response = client.get("/")
+
+    assert response.status_code == 200
+    assert "text/html" in response.headers["content-type"]
+    assert "CSV Insights Agent" in response.text
+
+
 def test_csv_analysis_uses_fallback(monkeypatch, tmp_path):
     with TestClient(load_app(monkeypatch, tmp_path)) as client:
         response = client.post(
@@ -49,4 +58,3 @@ def test_non_csv_upload_is_rejected(monkeypatch, tmp_path):
 
     assert response.status_code == 415
     assert response.json()["detail"] == "Only CSV files are allowed."
-

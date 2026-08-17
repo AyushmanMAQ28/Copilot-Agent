@@ -9,12 +9,15 @@ from uuid import uuid4
 import pandas as pd
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse, Response
+from fastapi.staticfiles import StaticFiles
 
 from .analysis import analyze_frame
 from .config import CORS_ORIGINS, DATABASE_PATH, UPLOADS_DIR
 
 
 MAX_UPLOAD_BYTES = 10 * 1024 * 1024
+STATIC_DIR = Path(__file__).resolve().parent / "static"
 
 
 def initialize_storage() -> None:
@@ -48,6 +51,7 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
 
 @app.get("/api/health")
@@ -102,3 +106,24 @@ async def analyze(
         )
     return result
 
+
+@app.get("/", include_in_schema=False)
+def index() -> FileResponse:
+    return FileResponse(
+        STATIC_DIR / "index.html",
+        headers={"Cache-Control": "no-store, max-age=0", "Pragma": "no-cache"},
+    )
+
+
+@app.get("/{full_path:path}", include_in_schema=False)
+def spa(full_path: str) -> Response:
+    blocked_prefixes = ("api/", "docs", "openapi.json", "redoc", "static/")
+    if full_path.startswith(blocked_prefixes):
+        raise HTTPException(status_code=404, detail="Not found")
+    candidate = STATIC_DIR / full_path
+    if candidate.is_file():
+        return FileResponse(candidate)
+    return FileResponse(
+        STATIC_DIR / "index.html",
+        headers={"Cache-Control": "no-store, max-age=0", "Pragma": "no-cache"},
+    )
