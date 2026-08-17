@@ -39,6 +39,34 @@ The frontend intentionally uses only Next.js, React, TypeScript, Chart.js, and t
 3. Select **Analyze**.
 4. Explore the three result panels. A next-step card runs a follow-up analysis using the same CSV.
 
+## Sample datasets
+
+`sample_data/` also contains four large, fully synthetic Excel workbooks that mimic
+real-world business exports. Every value is generated, so the files contain no
+personal or customer data.
+
+| File | Rows | Columns | Scenario |
+| --- | --- | --- | --- |
+| `retail_sales_transactions.xlsx` | 48,000 | 15 | Retail and e-commerce orders with channel, region, product, discount, and return data. |
+| `hospital_patient_encounters.xlsx` | 36,000 | 14 | Hospital admissions with department, diagnosis, length of stay, charges, and readmissions. |
+| `hr_employee_directory.xlsx` | 32,000 | 16 | Workforce records with department, level, tenure, compensation, and attrition flags. |
+| `banking_transactions.xlsx` | 50,000 | 13 | Retail banking transactions with channel, merchant category, running balance, and fraud flags. |
+
+Each workbook uses a frozen, filterable header row, seasonal date patterns, correlated
+columns, and a small share of blank values so grouping, trend, and data-quality
+questions return meaningful answers.
+
+The API accepts CSV uploads, so save a workbook as CSV in Excel or regenerate the
+datasets in CSV form before analyzing them:
+
+```bash
+pip install openpyxl
+python sample_data/generate_sample_data.py --format csv
+```
+
+The generator uses fixed seeds, so `--format xlsx` (the default), `--format csv`, and
+`--format both` always reproduce the same rows.
+
 ## Environment variables
 
 ### Backend (`backend/.env`)
