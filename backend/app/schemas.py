@@ -70,3 +70,8 @@ class AnalysisOut(BaseModel):
     chart_spec: dict[str, Any] | None
     status: str
     created_at: datetime
+
+
+class ChatAnalysisIn(BaseModel):
+    dataset_id: str
+    prompt: str = Field(min_length=1, max_length=10_000)

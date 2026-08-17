@@ -39,7 +39,8 @@ def create_analysis(project_id: str, payload: AnalysisIn, db: Session = Depends(
     except ChartSpecError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     analysis = Analysis(project_id=project_id, dataset_id=dataset.id, prompt=payload.prompt,
-                        result_json=json.dumps(analyze(payload.prompt, profile)), chart_spec_json=json.dumps(chart) if chart else None)
+                        result_json=json.dumps(analyze(payload.prompt, profile, loaded.headers, loaded.rows)),
+                        chart_spec_json=json.dumps(chart) if chart else None)
     db.add(analysis)
     db.commit()
     db.refresh(analysis)

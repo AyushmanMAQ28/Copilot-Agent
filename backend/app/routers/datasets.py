@@ -1,5 +1,5 @@
 import json
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
+from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
 from sqlalchemy.orm import Session
 from ..config import get_settings
 from ..database import get_db
@@ -53,6 +53,24 @@ async def upload_dataset(project_id: str, file: UploadFile = File(...), db: Sess
 @router.get("/{dataset_id}", response_model=DatasetOut)
 def get_dataset(project_id: str, dataset_id: str, db: Session = Depends(get_db)):
     return serialize(dataset_or_404(project_id, dataset_id, db))
+
+
+@router.get("/{dataset_id}/profile")
+def get_dataset_profile(project_id: str, dataset_id: str, db: Session = Depends(get_db)):
+    dataset = dataset_or_404(project_id, dataset_id, db)
+    return json.loads(dataset.profile_json)
+
+
+@router.get("/{dataset_id}/preview")
+def get_dataset_preview(project_id: str, dataset_id: str, limit: int = Query(default=50, ge=1, le=100),
+                        db: Session = Depends(get_db)):
+    dataset = dataset_or_404(project_id, dataset_id, db)
+    try:
+        loaded = load_csv(dataset.content.encode("utf-8"), dataset.filename,
+                          len(dataset.content.encode("utf-8")) + 1, dataset.row_count + 1)
+    except CSVValidationError as exc:
+        raise HTTPException(status_code=422, detail="Stored dataset is invalid") from exc
+    return {"columns": loaded.headers, "rows": loaded.rows[:limit], "row_count": dataset.row_count}
 
 
 @router.delete("/{dataset_id}", status_code=status.HTTP_204_NO_CONTENT)
