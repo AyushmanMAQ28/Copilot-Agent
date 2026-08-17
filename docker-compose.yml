@@ -4,6 +4,8 @@ services:
     ports: ["8000:8000"]
     environment:
       DATABASE_URL: sqlite:///./data/insights.db
+      UPLOAD_DIR: /app/data/uploads
+      QA_CACHE_DIR: /app/data/cache
     volumes:
       - insights-data:/app/data
   frontend:

@@ -1,10 +1,75 @@
-# CSV Insights Agent
+# CSV & Excel Insights Agent
 
-CSV Insights Agent turns a CSV upload into defensible data-quality findings, interactive visualizations, and follow-up questions. It is designed to remain useful without an LLM key: the backend always produces a deterministic pandas analysis.
+This agent turns a CSV or Excel upload into defensible data-quality findings, interactive
+visualizations, and follow-up questions. Workbooks with a lakh (100,000) rows or more are
+supported: files are converted to Parquet once and every question is answered with SQL in
+DuckDB, so raw rows never have to be held in memory or sent to a model. It stays useful
+without an LLM key, because the router, SQL planner and answer phrasing all have
+deterministic fallbacks.
 
 ## Architecture
 
-The React 18/Vite frontend proxies `/api` to a FastAPI service. FastAPI stores projects, chats, datasets, and analyses in SQLite; pandas performs CSV profiling and safe server-side chart aggregation. An optional OpenAI-compatible MAQ endpoint receives a compact profile, never raw CSV contents.
+The React 18/Vite frontend proxies `/api` to a FastAPI service. FastAPI stores projects,
+chats, datasets and analyses in SQLite, while the uploaded file itself is stored on disk
+and converted to columnar Parquet. Profiling, previews, charts, exports and question
+answering all run as bounded DuckDB queries. An optional OpenAI-compatible MAQ endpoint
+receives a compact schema card and a bounded result set - never raw sheet rows.
+
+```
+upload ─► ingest (stream → Parquet, cached by sha256)
+            └─► schema card (row counts, types, null %, distinct, min/max, top values)
+                  └─► router (AGGREGATE | SEMANTIC | HYBRID)
+                        ├─ AGGREGATE ─► SQL agent ─► DuckDB (read-only, ≤100 rows)
+                        ├─ SEMANTIC  ─► vector search over free-text columns ─► row_ids
+                        └─ HYBRID    ─► vector search ─► row_ids ─► SQL
+                              └─► answer (question + SQL + CSV result → text)
+```
+
+## Excel Q&A pipeline
+
+`backend/app/qa` implements the pipeline and can be used on its own:
+
+```bash
+cd backend
+python -m app.qa.cli ingest ../sample_data/excel/retail_orders_2024.xlsx
+python -m app.qa.cli schema ../sample_data/excel/retail_orders_2024.xlsx
+python -m app.qa.cli ask    ../sample_data/excel/retail_orders_2024.xlsx "What is the total profit by category?"
+```
+
+```python
+from app.qa import QAEngine
+
+with QAEngine("sample_data/excel/support_tickets.xlsx") as engine:
+    answer = engine.ask("How many tickets were created for each priority?")
+    print(answer.text, answer.sql, answer.tokens)
+```
+
+| Module | Responsibility |
+| --- | --- |
+| `qa/ingest.py` | Stream `.xlsx`/`.csv` to typed Parquet (constant memory), register DuckDB views, add a `row_id` per sheet |
+| `qa/schema.py` | Build the compact schema card - the only data description the model sees |
+| `qa/router.py` | One classification call: AGGREGATE, SEMANTIC or HYBRID, with counting questions forced onto SQL |
+| `qa/sql_agent.py` | Generate DuckDB SQL, reject anything that is not a single `SELECT`, retry twice on errors, truncate to 100 rows |
+| `qa/vector.py` | Embed only free-text columns as row documents, cache vectors by file hash, return `row_id`s |
+| `qa/answer.py` | Final phrasing from the question, the SQL and the result as CSV |
+| `qa/engine.py` | `QAEngine.ask(question) -> Answer` facade with token accounting |
+| `qa/cli.py` | `ingest` / `schema` / `ask` commands |
+
+Guarantees enforced in code, not in prompts:
+
+- raw sheet rows never appear in a prompt; only the schema card and a bounded result set do
+- vector search never answers a counting or aggregation question on its own
+- inline tabular data is serialised as CSV, the cheapest format in tokens
+- Parquet, schema cards and embeddings are all cached under `backend/data/cache`, keyed by the file's sha256
+- every model call logs prompt/completion tokens, surfaced in `Answer.tokens` and in the API `meta`
+
+## Handling very large files
+
+- Excel is read with `openpyxl(read_only=True)` in chunks and written straight to Parquet, so a 1 lakh row workbook never lands in memory as Python objects.
+- Column types are inferred over the whole column (no sampling), so long IDs and leading zeros stay text and decimals never truncate to integers.
+- Uploads are streamed to `UPLOAD_DIR` in 1 MB chunks; the dataset table stores a path and a hash instead of the file contents.
+- Profiles, previews, charts and exports are DuckDB queries; exports stream in 10,000 row batches.
+- Re-uploading the same file is a cache hit: ingestion is skipped entirely.
 
 ## Quick start
 
@@ -12,7 +77,9 @@ The React 18/Vite frontend proxies `/api` to a FastAPI service. FastAPI stores p
 docker compose up --build
 ```
 
-Open `http://localhost:5173` (or the Docker frontend port). Upload `sample_data/learning_demo.csv`.
+Open `http://localhost:5173` (or the Docker frontend port). Upload `sample_data/learning_demo.csv`,
+or one of the large example workbooks in [`sample_data/excel/`](sample_data/excel/README.md)
+(30,000-50,000 rows each, generated by `scripts/generate_sample_excels.py`).
 
 ### Local development
 
@@ -33,12 +100,26 @@ Copy `backend/.env.example` to `backend/.env` to configure the optional model. D
 | `LLM_BASE_URL` | `https://llm.maqsoftware.net/v1` | model endpoint |
 | `LLM_DEFAULT_MODEL` | `qwen-3.6-27b` | primary model |
 | `LLM_FALLBACK_MODEL` | `gemma-4-31b` | fallback model |
-| `MAX_UPLOAD_BYTES` | `52428800` | CSV size limit |
-| `MAX_CSV_ROWS` | `100000` | row limit |
+| `MAX_UPLOAD_BYTES` | `209715200` | upload size limit (200 MB) |
+| `MAX_CSV_ROWS` | `100000` | row limit for the legacy in-memory CSV loader |
+| `MAX_DATASET_ROWS` | `2000000` | row limit per sheet for the Parquet/DuckDB path |
+| `UPLOAD_DIR` | `./data/uploads` | where uploaded files are stored |
+| `QA_CACHE_DIR` | `./data/cache` | Parquet, schema card and embedding cache |
+| `QA_MAX_RESULT_ROWS` | `100` | rows returned to the model and the UI |
+| `QA_QUERY_TIMEOUT_SECONDS` | `30` | per-query watchdog |
+| `QA_VECTOR_MAX_ROWS` | `50000` | rows embedded per sheet for semantic search |
+| `DUCKDB_MEMORY_LIMIT` | `2GB` | DuckDB memory budget |
+| `DUCKDB_THREADS` | `4` | DuckDB worker threads |
 
 ## API
 
-`GET /api/health`, `GET /api/models`, project CRUD at `/api/projects`, dataset upload/listing at `/api/projects/{id}/datasets`, and analysis at `POST /api/chats/{id}/analyze` are the primary UI APIs. Dataset uploads accept only validated CSV files (extension, MIME, encoding, delimiter, and content sniffing checks). Exports are available through `/api/analyses/{id}/export/*`.
+`GET /api/health`, `GET /api/models`, project CRUD at `/api/projects`, dataset upload/listing at
+`/api/projects/{id}/datasets`, and analysis at `POST /api/chats/{id}/analyze` are the primary UI APIs.
+Uploads accept `.csv`, `.xlsx` and `.xlsm`; anything else is rejected with 422.
+`GET /api/projects/{id}/datasets/{dataset_id}/preview?sheet=…` reads any sheet straight from Parquet,
+`…/schema` returns the schema card the model sees, and `…/export?format=csv` streams the sheet back as CSV.
+Analysis responses keep their shape (`summary`, `insights`, `charts`, `next_steps`, `table`, `meta`) and add
+the executed SQL, the chosen route and token usage to `meta` for auditability.
 
 ## Screenshots
 
@@ -46,7 +127,16 @@ The application intentionally uses a neutral slate interface rather than copying
 
 ## Troubleshooting
 
-- **“Please select a CSV”**: Excel, PDFs, and images are intentionally rejected. Export spreadsheet data to CSV first.
+- **“Please select a .csv, .xlsx or .xlsm file”**: PDFs, images and legacy `.xls` files are rejected. Re-save `.xls` workbooks as `.xlsx` first.
+- **Existing SQLite database**: the `datasets` table gained `file_hash`, `storage_path` and `sheets_json`; the app adds them on startup, but datasets uploaded before the change keep their inline CSV path.
 - **No model key**: This is expected; a visible local/deterministic analysis remains available.
 - **Frontend cannot reach API**: run FastAPI on port 8000, or set `VITE_API_URL`.
-- **Large file rejected**: increase the documented upload/row limits only when sufficient memory is available.
+- **Large file rejected**: raise `MAX_UPLOAD_BYTES` / `MAX_DATASET_ROWS`; ingestion streams to disk, so RAM is rarely the constraint.
+- **First question on a big workbook is slow**: the first upload converts the file to Parquet; later questions reuse the cache in `QA_CACHE_DIR`.
+
+## Tests
+
+```bash
+cd backend && python -m pytest tests -q     # includes a synthetic 100,000 row workbook
+cd frontend && npm run lint && npm run build
+```
