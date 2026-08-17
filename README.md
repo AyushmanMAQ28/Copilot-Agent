@@ -1,11 +1,32 @@
 # CSV Insights Agent
 
-An AI-powered data analysis agent. Upload a CSV and get **Key Insights**, interactive **Data Visualizations**, and actionable **Next Steps**.
+Upload a CSV and receive key insights, interactive visualizations, and actionable next steps.
 
-> Bootstrap commit — the full-stack application (FastAPI backend + React/TypeScript frontend) is being scaffolded.
+## Frontend
 
-## Planned stack
+The frontend is a dependency-minimal Next.js App Router application. It intentionally uses only Next.js, React, TypeScript, Chart.js, and their type packages so it can be installed in restricted corporate npm environments.
 
-- **Backend:** Python 3.11, FastAPI, pandas, SQLAlchemy + SQLite, OpenAI-compatible SLM client
-- **Frontend:** React 18 + TypeScript + Vite, Tailwind CSS, Recharts, dark/light mode
-- **Features:** CSV-only upload, project folders with persistent context, chat history, chart expand / PNG download / CSV export, clickable next steps that re-trigger the agent
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+Open http://localhost:3000. Production commands are `npm run build` and `npm start`.
+
+### Quick start
+
+In one terminal, start the existing FastAPI backend on port 8000. In another:
+
+```bash
+cd frontend
+cp .env.example .env.local
+npm install
+npm run dev
+```
+
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `NEXT_PUBLIC_API_BASE_URL` | `http://localhost:8000` | FastAPI API base URL used by the development rewrite. |
+
+The application works without `LLM_API_KEY`, using deterministic pandas analysis when the backend is configured for it.
