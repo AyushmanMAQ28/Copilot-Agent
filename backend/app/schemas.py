@@ -44,6 +44,7 @@ class DatasetOut(BaseModel):
     row_count: int
     columns: list[str]
     profile: dict[str, Any]
+    sheets: list[dict[str, Any]] = []
     created_at: datetime
 
 

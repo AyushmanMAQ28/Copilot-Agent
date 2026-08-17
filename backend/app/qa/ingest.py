@@ -350,8 +350,12 @@ def _load_cached(cache: WorkbookCache, source: Path) -> Workbook | None:
 
 def ingest(path: str | os.PathLike[str], *, cache_root: str | os.PathLike[str] = "./data/cache",
            max_rows: int = DEFAULT_MAX_ROWS, chunk_rows: int = DEFAULT_CHUNK_ROWS,
-           refresh: bool = False) -> Workbook:
-    """Convert a workbook to cached Parquet tables and describe them."""
+           display_name: str | None = None, refresh: bool = False) -> Workbook:
+    """Convert a workbook to cached Parquet tables and describe them.
+
+    ``display_name`` keeps the original upload name in table names and in the
+    schema card even when the file is stored on disk under a generated name.
+    """
     source = Path(path)
     if not source.is_file():
         raise IngestError(f"File not found: {source}")
@@ -377,8 +381,9 @@ def ingest(path: str | os.PathLike[str], *, cache_root: str | os.PathLike[str] =
         connection.execute(f"SET temp_directory={quote_literal(str(cache.directory))}")
         if suffix in CSV_SUFFIXES:
             source_sql, columns, source_columns = _csv_source_sql(source)
-            name = sanitize_identifier(source.stem, taken_tables, fallback="sheet")
-            tables.append(_materialise(connection, cache, name, source.stem, source_sql, columns, source_columns))
+            stem = Path(display_name).stem if display_name else source.stem
+            name = sanitize_identifier(stem, taken_tables, fallback="sheet")
+            tables.append(_materialise(connection, cache, name, stem, source_sql, columns, source_columns))
         else:
             for sheet, headers, chunks in _excel_sheets(source, chunk_rows, max_rows):
                 taken_columns: set[str] = set()
@@ -397,7 +402,7 @@ def ingest(path: str | os.PathLike[str], *, cache_root: str | os.PathLike[str] =
         if not tables:
             raise IngestError("The workbook does not contain any readable rows")
 
-    workbook = Workbook(source_path=str(source), file_name=source.name, digest=digest,
+    workbook = Workbook(source_path=str(source), file_name=display_name or source.name, digest=digest,
                         tables=tuple(tables), cache=cache,
                         ingest_ms=int((time.perf_counter() - started) * 1000))
     cache.write_manifest({**workbook.to_dict(), "ingest_ms": workbook.ingest_ms})

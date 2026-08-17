@@ -5,6 +5,8 @@ from sqlalchemy.orm import Session
 from ..database import get_db
 from ..models import Analysis, Chat, Dataset, Message
 from ..schemas import ChatAnalysisIn
+from fastapi.concurrency import run_in_threadpool
+from ..services import dataset_store, qa_analysis
 from ..services.analyzer import analyze
 from ..services.csv_loader import CSVValidationError, load_csv
 
@@ -12,7 +14,7 @@ router = APIRouter(prefix="/api/chats", tags=["chat analysis"])
 
 
 @router.post("/{chat_id}/analyze")
-def analyze_chat(chat_id: str, payload: ChatAnalysisIn, db: Session = Depends(get_db)):
+async def analyze_chat(chat_id: str, payload: ChatAnalysisIn, db: Session = Depends(get_db)):
     """Analyze a dataset in the chat's project and return the UI result contract."""
     chat = db.get(Chat, chat_id)
     if not chat:
@@ -20,14 +22,21 @@ def analyze_chat(chat_id: str, payload: ChatAnalysisIn, db: Session = Depends(ge
     dataset = db.get(Dataset, payload.dataset_id)
     if not dataset or dataset.project_id != chat.project_id:
         raise HTTPException(status_code=404, detail="Dataset not found in this chat's project")
-    try:
-        loaded = load_csv(dataset.content.encode("utf-8"), dataset.filename,
-                          len(dataset.content.encode("utf-8")) + 1, dataset.row_count + 1)
-    except CSVValidationError as exc:
-        raise HTTPException(status_code=422, detail="Stored dataset is invalid") from exc
-    started = time.perf_counter()
-    result = analyze(payload.prompt, json.loads(dataset.profile_json), loaded.headers, loaded.rows)
-    result["meta"]["duration_ms"] = int((time.perf_counter() - started) * 1000)
+    profile = json.loads(dataset.profile_json)
+    if dataset.storage_path:
+        try:
+            result = await run_in_threadpool(qa_analysis.analyze_dataset, payload.prompt, dataset, profile)
+        except dataset_store.DatasetError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+    else:
+        stored_bytes = (dataset.content or "").encode("utf-8")
+        try:
+            loaded = load_csv(stored_bytes, dataset.filename, len(stored_bytes) + 1, dataset.row_count + 1)
+        except CSVValidationError as exc:
+            raise HTTPException(status_code=422, detail="Stored dataset is invalid") from exc
+        started = time.perf_counter()
+        result = analyze(payload.prompt, profile, loaded.headers, loaded.rows)
+        result["meta"]["duration_ms"] = int((time.perf_counter() - started) * 1000)
     chart_spec = result["charts"][0] if result["charts"] else None
     db.add(Message(chat_id=chat.id, role="user", content=payload.prompt))
     db.add(Message(chat_id=chat.id, role="assistant", content=result["summary"], metadata_json=json.dumps(result)))

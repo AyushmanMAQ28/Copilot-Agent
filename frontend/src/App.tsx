@@ -6,8 +6,10 @@ import './App.css'
 
 type Insight = { id: string; title: string; body: string; category: string; severity: string; confidence: number }
 type Chart = { id: string; title: string; description: string; chart_type: string; x_key: string; series: { key: string; label: string; color: string }[]; data: Record<string, string | number>[] }
-type Result = { summary: string; insights: Insight[]; charts: Chart[]; next_steps: { id: string; question: string; rationale: string }[]; table: { columns: string[]; rows: Record<string, string | number>[] }; meta: { model: string; duration_ms: number } }
+type Meta = { model: string; duration_ms: number; engine?: string; route?: string; sql?: string; row_count?: number; tokens?: { total_tokens?: number } }
+type Result = { summary: string; insights: Insight[]; charts: Chart[]; next_steps: { id: string; question: string; rationale: string }[]; table: { columns: string[]; rows: Record<string, string | number>[] }; meta: Meta }
 const api = import.meta.env.VITE_API_URL ?? '/api'
+const ACCEPTED = ['.csv', '.xlsx', '.xlsm']
 
 function App() {
   const [file, setFile] = useState<File>()
@@ -21,7 +23,7 @@ function App() {
   const input = useRef<HTMLInputElement>(null)
   const upload = async (picked: File) => {
     setError('')
-    if (!picked.name.toLowerCase().endsWith('.csv')) { setError('Please select a CSV file.'); return }
+    if (!ACCEPTED.some(suffix => picked.name.toLowerCase().endsWith(suffix))) { setError('Please select a .csv, .xlsx or .xlsm file.'); return }
     const project = await fetch(`${api}/projects`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: 'My analysis' }) }).then(r => r.json() as Promise<{ id: string }>)
     const data = new FormData(); data.append('file', picked)
     const uploaded = await fetch(`${api}/projects/${project.id}/datasets`, { method: 'POST', body: data })
@@ -30,7 +32,7 @@ function App() {
     setFile(picked); setDatasetId(dataset.id)
   }
   const analyze = async (question = prompt) => {
-    if (!datasetId) { setError('Attach a CSV before running analysis.'); return }
+    if (!datasetId) { setError('Attach a CSV or Excel file before running analysis.'); return }
     setLoading(true); setError('')
     try {
       const project = await fetch(`${api}/projects`).then(r => r.json() as Promise<{ id: string }[]>)
@@ -43,16 +45,18 @@ function App() {
   const toggleTheme = () => { const value = !dark; setDark(value); localStorage.setItem('theme', value ? 'dark' : 'light'); document.documentElement.classList.toggle('dark', value) }
   const saveChart = async (chart: Chart) => { const node = document.getElementById(`chart-${chart.id}`); if (!node) return; const href = await toPng(node); const a = document.createElement('a'); a.href = href; a.download = `${chart.title}.png`; a.click() }
   return <main className={dark ? 'app dark' : 'app'}>
-    <aside><div className="brand"><Sparkles size={20} /> CSV Insights</div><button className="new">+ New analysis</button><p className="muted">PROJECTS</p><div className="project">My analysis<br /><small>Upload a CSV to begin</small></div><div className="bottom"><button onClick={toggleTheme} aria-label="Toggle theme">{dark ? <Sun size={17} /> : <Moon size={17} />} {dark ? 'Light' : 'Dark'} mode</button><small>Model · qwen-3.6-27b</small></div></aside>
+    <aside><div className="brand"><Sparkles size={20} /> Data Insights</div><button className="new">+ New analysis</button><p className="muted">PROJECTS</p><div className="project">My analysis<br /><small>Upload a CSV or Excel file to begin</small></div><div className="bottom"><button onClick={toggleTheme} aria-label="Toggle theme">{dark ? <Sun size={17} /> : <Moon size={17} />} {dark ? 'Light' : 'Dark'} mode</button><small>Model · qwen-3.6-27b</small></div></aside>
     <section className="workspace">
       <header><div><h1>Data workspace</h1><p>Ask questions, uncover patterns, make decisions.</p></div><span className="status">Local analysis ready</span></header>
       <div className="composer"><textarea value={prompt} onChange={e => setPrompt(e.target.value)} onKeyDown={e => { if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') void analyze() }} aria-label="Analysis prompt" />
-        <div className="compose-actions"><input ref={input} type="file" accept=".csv,text/csv" hidden onChange={e => { const picked = e.target.files?.[0]; if (picked) void upload(picked).catch(reason => setError(reason instanceof Error ? reason.message : 'Upload failed')) }} />
-          {file ? <span className="file-chip"><FileUp size={15} />{file.name}<button onClick={() => { setFile(undefined); setDatasetId(undefined) }}><X size={14} /></button></span> : <button onClick={() => input.current?.click()}><FileUp size={16} /> Attach CSV</button>}
+        <div className="compose-actions"><input ref={input} type="file" accept=".csv,.xlsx,.xlsm,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" hidden onChange={e => { const picked = e.target.files?.[0]; if (picked) void upload(picked).catch(reason => setError(reason instanceof Error ? reason.message : 'Upload failed')) }} />
+          {file ? <span className="file-chip"><FileUp size={15} />{file.name}<button onClick={() => { setFile(undefined); setDatasetId(undefined) }}><X size={14} /></button></span> : <button onClick={() => input.current?.click()}><FileUp size={16} /> Attach CSV or Excel</button>}
           <span>⌘ Enter</span><button className="send" disabled={loading} onClick={() => void analyze()}><Send size={16} /> {loading ? 'Analyzing…' : 'Analyze'}</button></div></div>
       {error && <div className="error">{error}</div>}
-      {!result && !loading && <div className="empty"><FileUp size={42} /><h2>Upload a CSV to see visualizations</h2><p>Your data stays structured: profile, insights, charts, and useful follow-up questions appear here.</p></div>}
-      {(result || loading) && <><p className="summary">{result?.summary ?? 'Parsing CSV → Profiling → Reasoning → Building charts'}</p><div className="grid">
+      {!result && !loading && <div className="empty"><FileUp size={42} /><h2>Upload a CSV or Excel file to see visualizations</h2><p>Workbooks with a lakh rows or more are converted to Parquet and queried with SQL, so only the answer travels to the model.</p></div>}
+      {(result || loading) && <><p className="summary">{result?.summary ?? 'Reading workbook → Profiling → Routing → Running SQL'}</p>
+        {result?.meta?.sql && <details className="sql"><summary>SQL used{result.meta.route ? ` · ${result.meta.route}` : ''}{result.meta.row_count ? ` · ${result.meta.row_count.toLocaleString()} rows scanned` : ''}</summary><pre>{result.meta.sql}</pre></details>}
+        <div className="grid">
         <Panel title="Key insights">{loading ? <Skeleton /> : result?.insights.map(i => <article className="insight" key={i.id}><span className={`badge ${i.severity}`}>{i.category}</span><h3>{i.title}</h3><p>{i.body}</p><small>{Math.round(i.confidence * 100)}% confidence</small></article>)}</Panel>
         <Panel title="Data visualizations" wide>{loading ? <Skeleton /> : result?.charts.map(chart => <article className="chart-card" key={chart.id}><div className="chart-head"><div><h3>{chart.title}</h3><p>{chart.description}</p></div><div><button aria-label="Expand chart" onClick={() => setExpanded(chart)}><ZoomIn size={16} /></button><button aria-label="Download PNG" onClick={() => void saveChart(chart)}><Download size={16} /></button></div></div><ChartView chart={chart} /></article>)}
           {result && <Table data={result.table} />}</Panel>

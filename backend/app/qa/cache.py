@@ -13,7 +13,7 @@ import shutil
 from dataclasses import dataclass
 from pathlib import Path
 
-CACHE_VERSION = 2
+CACHE_VERSION = 3
 _CHUNK = 1024 * 1024
 _SAFE_NAME = re.compile(r"[^A-Za-z0-9_.-]+")
 

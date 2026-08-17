@@ -1,10 +1,11 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from .config import get_settings
-from .database import Base, engine
+from .database import Base, engine, ensure_schema
 from .routers import analyses, chat_analysis, chats, datasets, exports, projects
 
 Base.metadata.create_all(bind=engine)
+ensure_schema()
 settings = get_settings()
 app = FastAPI(title="CSV Insights Agent API", version="1.0.0")
 app.add_middleware(CORSMiddleware, allow_origins=[item.strip() for item in settings.cors_origins.split(",")],

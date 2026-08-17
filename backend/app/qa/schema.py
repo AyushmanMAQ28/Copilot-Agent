@@ -67,6 +67,7 @@ class ColumnCard:
     distinct_is_approx: bool = False
     minimum: str = ""
     maximum: str = ""
+    mean: float | None = None
     avg_length: float = 0.0
     top_values: list[tuple[str, int]] = field(default_factory=list)
     samples: list[str] = field(default_factory=list)
@@ -178,17 +179,20 @@ def _table_statistics(connection: duckdb.DuckDBPyConnection, table: Table) -> di
         else:
             selects += ["NULL", "NULL"]
         selects.append(f"avg(length({quoted}))" if is_text(column.dtype) else "NULL")
+        selects.append(f"avg({quoted})" if is_numeric(column.dtype) else "NULL")
     row = connection.execute(
         f"SELECT {', '.join(selects)} FROM {quote_identifier(table.name)}"
     ).fetchone()
     assert row is not None
     statistics: dict[str, dict[str, Any]] = {}
     for index, column in enumerate(table.columns):
-        offset = index * 5
+        offset = index * 6
+        mean = row[offset + 5]
         statistics[column.name] = {
             "non_null": int(row[offset] or 0), "distinct": int(row[offset + 1] or 0),
             "min": row[offset + 2], "max": row[offset + 3],
-            "avg_length": float(row[offset + 4] or 0.0), "exact": exact,
+            "avg_length": float(row[offset + 4] or 0.0),
+            "mean": float(mean) if mean is not None else None, "exact": exact,
         }
     return statistics
 
@@ -231,7 +235,8 @@ def build(connection: duckdb.DuckDBPyConnection, workbook: Workbook) -> SchemaCa
                 name=column.name, source_name=column.source_name, dtype=column.dtype,
                 null_pct=round(null_pct, 2), distinct_count=stats["distinct"],
                 distinct_is_approx=not stats["exact"], minimum=_render(stats["min"], 30),
-                maximum=_render(stats["max"], 30), avg_length=round(stats["avg_length"], 1),
+                maximum=_render(stats["max"], 30), mean=stats["mean"],
+                avg_length=round(stats["avg_length"], 1),
                 samples=samples.get(column.name, []),
             )
             if 0 < card.distinct_count < TOP_VALUE_CARDINALITY:

@@ -1,11 +1,10 @@
-import csv
-import io
 import json
 from fastapi import APIRouter, Depends, HTTPException
-from fastapi.responses import Response
+from fastapi.responses import Response, StreamingResponse
 from sqlalchemy.orm import Session
 from ..database import get_db
 from ..models import Analysis
+from ..services import dataset_store
 from .datasets import dataset_or_404
 
 router = APIRouter(prefix="/api/projects/{project_id}", tags=["exports"])
@@ -15,9 +14,16 @@ router = APIRouter(prefix="/api/projects/{project_id}", tags=["exports"])
 def export_dataset(project_id: str, dataset_id: str, format: str = "csv", db: Session = Depends(get_db)):
     dataset = dataset_or_404(project_id, dataset_id, db)
     if format == "csv":
-        safe_name = "".join(char if char.isalnum() or char in "._-" else "_" for char in dataset.filename)
-        return Response(dataset.content, media_type="text/csv; charset=utf-8",
-                        headers={"Content-Disposition": f'attachment; filename="{safe_name}"'})
+        stem = "".join(char if char.isalnum() or char in "._-" else "_" for char in dataset.filename)
+        safe_name = stem.rsplit(".", 1)[0] + ".csv" if "." in stem else stem + ".csv"
+        headers = {"Content-Disposition": f'attachment; filename="{safe_name}"'}
+        if dataset.storage_path:
+            try:
+                stream = dataset_store.iter_csv(dataset.storage_path)
+            except dataset_store.DatasetError as exc:
+                raise HTTPException(status_code=422, detail=str(exc)) from exc
+            return StreamingResponse(stream, media_type="text/csv; charset=utf-8", headers=headers)
+        return Response(dataset.content or "", media_type="text/csv; charset=utf-8", headers=headers)
     if format == "json":
         return Response(json.dumps({"filename": dataset.filename, "profile": json.loads(dataset.profile_json)}),
                         media_type="application/json")
