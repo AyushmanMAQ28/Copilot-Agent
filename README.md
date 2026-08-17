@@ -1,114 +1,43 @@
 # CSV Insights Agent
 
-CSV Insights Agent turns an uploaded CSV and a plain-language question into three useful outputs:
-
-- **Key Insights** — concise findings from the data
-- **Data Visualizations** — an interactive chart that can be expanded or exported
-- **Next Steps** — clickable recommendations that run a follow-up analysis
-
-The app can use an OpenAI-compatible language model when a key is configured. Without a key, it remains fully usable through its deterministic pandas analysis.
-
-## Prerequisites
-
-- Python 3.11 or newer
-- Node.js 18 or newer
-- npm
+CSV Insights Agent turns an uploaded CSV and a plain-language question into key insights, interactive visualizations, and actionable next steps. It uses an OpenAI-compatible language model when configured and otherwise remains fully usable through deterministic pandas analysis.
 
 ## Quick start
 
-Keep the backend and frontend running at the same time in **two separate terminals**.
+Run the backend and frontend in two terminals.
 
-### 1. Backend
+### Backend
 
-1. Open a terminal at the repository root and enter the backend directory:
+```bash
+cd backend
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+cp .env.example .env
+uvicorn app.main:app --reload --port 8000
+```
 
-   ```bash
-   cd backend
-   ```
+On Windows PowerShell, activate the environment with `.\.venv\Scripts\Activate.ps1` and use `Copy-Item .env.example .env`. The API is available at <http://localhost:8000> and its documentation at <http://localhost:8000/docs>.
 
-2. Create and activate a virtual environment.
+### Frontend
 
-   **macOS/Linux**
+```bash
+cd frontend
+cp .env.example .env.local
+npm install
+npm run dev
+```
 
-   ```bash
-   python3 -m venv .venv
-   source .venv/bin/activate
-   ```
+Open <http://localhost:3000>. For production, run `npm run build` followed by `npm start`.
 
-   **Windows PowerShell**
-
-   ```powershell
-   py -3.11 -m venv .venv
-   .\.venv\Scripts\Activate.ps1
-   ```
-
-3. Install dependencies:
-
-   ```bash
-   pip install -r requirements.txt
-   ```
-
-4. Copy the example configuration:
-
-   **macOS/Linux**
-
-   ```bash
-   cp .env.example .env
-   ```
-
-   **Windows PowerShell**
-
-   ```powershell
-   Copy-Item .env.example .env
-   ```
-
-5. Open `.env` and replace `sk-your-key-here` with your LLM API key. You may leave the placeholder in place to use the built-in pandas fallback.
-
-6. Start the API:
-
-   ```bash
-   uvicorn app.main:app --reload --port 8000
-   ```
-
-The API is available at <http://localhost:8000>, with interactive documentation at <http://localhost:8000/docs>.
-
-### 2. Frontend
-
-1. Open a **second terminal** at the repository root:
-
-   ```bash
-   cd frontend
-   npm install
-   ```
-
-2. Copy the example configuration:
-
-   **macOS/Linux**
-
-   ```bash
-   cp .env.example .env
-   ```
-
-   **Windows PowerShell**
-
-   ```powershell
-   Copy-Item .env.example .env
-   ```
-
-3. Start the Vite development server:
-
-   ```bash
-   npm run dev
-   ```
-
-Open <http://localhost:5173> in a browser.
+The frontend intentionally uses only Next.js, React, TypeScript, Chart.js, and their type packages. This dependency-minimal setup supports restricted corporate npm environments.
 
 ## Try it out
 
 1. Choose `sample_data/learning_demo.csv`.
-2. Enter: **Show me participation, completion, and assignment completion by course.**
-3. Select **Analyze CSV**.
-4. Explore the three result panels. A next-step card can be selected to run another analysis.
+2. Enter **Show me participation, completion, and assignment completion by course.**
+3. Select **Analyze**.
+4. Explore the three result panels. A next-step card runs a follow-up analysis using the same CSV.
 
 ## Environment variables
 
@@ -116,61 +45,22 @@ Open <http://localhost:5173> in a browser.
 
 | Name | Default | Description |
 | --- | --- | --- |
-| `LLM_API_KEY` | `sk-your-key-here` | Optional language-model API key. The placeholder activates the pandas fallback. |
+| `LLM_API_KEY` | `sk-your-key-here` | Optional language-model API key; the placeholder uses pandas analysis. |
 | `LLM_BASE_URL` | `https://llm.maqsoftware.net/v1` | Base URL for the OpenAI-compatible API. |
 | `LLM_MODEL` | `qwen-3.6-27b` | Model used for generated insights and next steps. |
-| `DATABASE_PATH` | `data/insights.db` | SQLite path, resolved relative to `backend/`. |
-| `UPLOADS_DIR` | `uploads` | Uploaded-file directory, resolved relative to `backend/`. |
+| `DATABASE_PATH` | `data/insights.db` | SQLite path relative to `backend/`. |
+| `UPLOADS_DIR` | `uploads` | Uploaded-file directory relative to `backend/`. |
 | `CORS_ORIGINS` | `http://localhost:5173` | Comma-separated browser origins allowed to call the API. |
 
-### Frontend (`frontend/.env`)
+### Frontend (`frontend/.env.local`)
 
 | Name | Default | Description |
 | --- | --- | --- |
-| `VITE_API_BASE_URL` | `/api` | API URL used by the browser. `/api` uses the local Vite proxy. |
-| `LLM_API_KEY` | `sk-your-key-here` | Inert placeholder kept for configuration consistency; browser code does not read or expose it. |
+| `NEXT_PUBLIC_API_BASE_URL` | `http://localhost:8000` | FastAPI URL used by the Next.js `/api` rewrite. |
 
-## Project structure
-
-```text
-.
-├── backend/
-│   ├── app/                 # FastAPI routes, configuration, and analysis
-│   ├── tests/               # Backend API tests
-│   ├── .env.example
-│   └── requirements.txt
-├── frontend/
-│   ├── src/                 # React user interface
-│   ├── .env.example
-│   ├── package.json
-│   └── vite.config.ts       # Port 5173 and local /api proxy
-├── sample_data/
-│   └── learning_demo.csv
-└── README.md
-```
-
-SQLite data and uploads are created automatically inside `backend/` on first startup.
-
-## Running tests
-
-Backend:
+## Tests
 
 ```bash
-cd backend
-pytest
+cd backend && pytest
+cd frontend && npm run typecheck && npm run build
 ```
-
-Frontend build and type-check:
-
-```bash
-cd frontend
-npm run build
-npx tsc --noEmit
-```
-
-## Troubleshooting
-
-- **Port already in use:** Stop the process using port 8000 or 5173, then restart that server. You can identify it with `lsof -i :8000` or `lsof -i :5173` on macOS/Linux, or `Get-NetTCPConnection -LocalPort 8000,5173` in PowerShell.
-- **Missing or invalid `LLM_API_KEY`:** The app still works with deterministic pandas-only analysis. Set a valid key in `backend/.env` when generated language-model responses are needed.
-- **CORS error:** Confirm the frontend is at `http://localhost:5173`, the backend is at `http://localhost:8000`, and `CORS_ORIGINS` contains the exact frontend origin. Restart the backend after changing `.env`.
-- **Upload rejected:** Only files ending in `.csv` are accepted. Export spreadsheet data as CSV first; empty files and files larger than 10 MB are also rejected.
