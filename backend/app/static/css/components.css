@@ -1,0 +1,107 @@
+.btn {
+  border: 1px solid var(--border);
+  background: var(--bg-elevated);
+  color: var(--text);
+  border-radius: var(--radius-2);
+  padding: 7px 11px;
+  transition: background var(--duration-fast) var(--ease-out), border-color var(--duration-fast) var(--ease-out);
+}
+.btn:hover { background: var(--bg-subtle); }
+.btn-primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+.btn-primary:hover { background: var(--accent-hover); }
+.btn-icon { padding: 6px 8px; min-width: 30px; }
+.input {
+  width: 100%;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-2);
+  background: var(--bg);
+  padding: 8px 10px;
+}
+.input::placeholder { color: var(--text-faint); }
+.textarea { resize: none; min-height: 44px; }
+.badge {
+  display: inline-flex;
+  align-items: center;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--border);
+  padding: 2px 8px;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  background: var(--bg-subtle);
+}
+.badge-success { color: var(--success); border-color: color-mix(in oklab, var(--success), var(--border) 70%); }
+.banner {
+  margin: var(--space-4) var(--space-6) 0;
+  padding: var(--space-3);
+  border-radius: var(--radius-2);
+  border: 1px solid var(--border);
+  background: var(--accent-subtle);
+}
+.list { display: grid; gap: var(--space-3); margin-top: var(--space-3); }
+.insight-item {
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-2);
+  padding: var(--space-3);
+  display: grid;
+  gap: var(--space-2);
+  background: var(--bg);
+}
+.insight-item h3 { line-height: 1.35; }
+.dialog {
+  width: min(1080px, calc(100vw - 2rem));
+  border: 1px solid var(--border);
+  border-radius: var(--radius-3);
+  padding: 0;
+  background: var(--bg-elevated);
+  color: var(--text);
+  box-shadow: var(--shadow-3);
+}
+.dialog::backdrop { background: rgba(2, 6, 23, 0.65); }
+.dialog-body { padding: var(--space-4); display: grid; gap: var(--space-3); }
+.toast-region {
+  position: fixed;
+  right: var(--space-4);
+  bottom: var(--space-4);
+  display: grid;
+  gap: var(--space-2);
+  z-index: 40;
+}
+.toast {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-2);
+  box-shadow: var(--shadow-2);
+  padding: var(--space-2) var(--space-3);
+}
+.stepper { display: grid; grid-template-columns: repeat(4, 1fr); gap: var(--space-2); padding: 0; margin: 0; list-style: none; }
+.stepper li { border: 1px solid var(--border); border-radius: var(--radius-2); padding: var(--space-2); color: var(--text-faint); }
+.stepper li.active { border-color: var(--accent); color: var(--accent); background: var(--accent-subtle); }
+.table-shell { overflow: auto; border: 1px solid var(--border-subtle); border-radius: var(--radius-2); }
+.table-shell table { border-collapse: collapse; width: 100%; }
+.table-shell th, .table-shell td { border-bottom: 1px solid var(--border-subtle); padding: 8px; text-align: left; white-space: nowrap; }
+.table-shell th button { border: none; background: transparent; padding: 0; color: inherit; }
+.pagination { margin-top: var(--space-2); display: flex; gap: var(--space-2); align-items: center; }
+.chart-shell { position: relative; border: 1px solid var(--border-subtle); border-radius: var(--radius-2); padding: var(--space-2); background: var(--bg); }
+.chart-tooltip {
+  position: absolute;
+  pointer-events: none;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-1);
+  background: var(--bg-elevated);
+  padding: var(--space-2);
+  box-shadow: var(--shadow-2);
+  font-size: 0.75rem;
+  max-width: 260px;
+  z-index: 2;
+}
+.legend { display: flex; flex-wrap: wrap; gap: var(--space-2); margin-top: var(--space-2); }
+.legend button { display: inline-flex; align-items: center; gap: 6px; }
+.legend-swatch { width: 12px; height: 12px; border-radius: 2px; border: 1px solid color-mix(in oklab, var(--text), transparent 75%); }
+.skeleton {
+  height: 80px;
+  border-radius: var(--radius-2);
+  background: linear-gradient(90deg, var(--bg-subtle) 25%, color-mix(in oklab, var(--bg-subtle), #fff 20%) 50%, var(--bg-subtle) 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.2s infinite;
+}
+@keyframes shimmer { to { background-position: -200% 0; } }

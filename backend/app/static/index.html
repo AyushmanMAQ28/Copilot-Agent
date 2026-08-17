@@ -1,0 +1,138 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>CSV Insights Agent</title>
+    <script>
+      (() => {
+        const pref = localStorage.getItem("theme") || "system";
+        const dark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+        document.documentElement.dataset.theme = pref === "system" ? (dark ? "dark" : "light") : pref;
+      })();
+    </script>
+    <link rel="stylesheet" href="/static/css/tokens.css" />
+    <link rel="stylesheet" href="/static/css/base.css" />
+    <link rel="stylesheet" href="/static/css/components.css" />
+    <link rel="stylesheet" href="/static/css/app.css" />
+  </head>
+  <body>
+    <a class="skip-link" href="#main">Skip to content</a>
+    <div class="app-shell" id="app">
+      <aside class="sidebar card" aria-label="Sidebar" id="sidebar">
+        <div class="brand"><span class="brand-dot" aria-hidden="true"></span><strong>CSV Insights</strong></div>
+        <button class="btn btn-primary" id="new-project-btn">New project</button>
+        <button class="btn" id="new-chat-btn">New chat</button>
+        <input class="input" id="chat-search" type="search" placeholder="Search chats" aria-label="Search chats" />
+        <div id="project-tree" class="project-tree" aria-live="polite"></div>
+        <div class="sidebar-footer">
+          <label class="label" for="model-select">Model</label>
+          <select id="model-select" class="input">
+            <option value="qwen-3.6-27b">qwen-3.6-27b</option>
+            <option value="gpt-4o-mini">gpt-4o-mini</option>
+            <option value="deterministic">deterministic</option>
+          </select>
+          <div class="row gap-sm">
+            <button class="btn" id="theme-toggle">Toggle theme</button>
+            <button class="btn" id="sidebar-toggle" aria-expanded="true">Collapse</button>
+          </div>
+        </div>
+      </aside>
+
+      <main id="main" class="workspace" aria-live="polite">
+        <header class="topbar">
+          <div>
+            <h1>CSV Insights Agent</h1>
+            <p class="text-muted" id="route-label">Project workspace</p>
+          </div>
+          <div class="row gap-sm wrap-end">
+            <span class="badge badge-success" id="quality-badge">Data quality —</span>
+            <span class="badge" id="latency-badge">Latency —</span>
+            <button class="btn btn-icon" id="command-btn" aria-label="Open command palette">⌘K</button>
+          </div>
+        </header>
+
+        <section id="llm-banner" class="banner" role="status" hidden>
+          <strong>LLM_API_KEY not configured.</strong> Deterministic pandas-only analysis is active.
+        </section>
+
+        <section class="starter card" id="starter-prompts" aria-label="Suggested starter prompts"></section>
+
+        <section class="progress card" id="progress-card" hidden>
+          <p class="label">Analysis progress</p>
+          <ol class="stepper" id="stepper"></ol>
+        </section>
+
+        <nav class="mobile-tabs" aria-label="Panel tabs">
+          <button class="tab is-active" data-tab="insights">Key Insights</button>
+          <button class="tab" data-tab="charts">Data Visualizations</button>
+          <button class="tab" data-tab="steps">Next Steps</button>
+        </nav>
+
+        <section class="panel-grid" id="panel-grid">
+          <section class="panel card" data-panel="insights" aria-labelledby="insights-heading">
+            <div class="panel-head">
+              <h2 id="insights-heading">Key Insights</h2>
+              <input class="input" id="insight-search" type="search" placeholder="Filter insights" aria-label="Filter insights" />
+            </div>
+            <div class="list" id="insight-list"></div>
+            <div class="card" id="pinned-board"><h3>Pinned insights</h3><div id="pinned-list" class="list"></div></div>
+          </section>
+
+          <section class="panel card" data-panel="charts" aria-labelledby="charts-heading">
+            <div class="panel-head"><h2 id="charts-heading">Data Visualizations</h2></div>
+            <div class="row gap-sm wrap-end">
+              <button class="btn" id="compare-toggle">Compare mode</button>
+              <button class="btn" id="export-report-btn">Export report</button>
+            </div>
+            <div class="list" id="chart-list"></div>
+            <div class="card">
+              <h3>Complete Data Analysis Table</h3>
+              <div id="analysis-table"></div>
+            </div>
+          </section>
+
+          <section class="panel card" data-panel="steps" aria-labelledby="steps-heading">
+            <div class="panel-head"><h2 id="steps-heading">Next Steps</h2></div>
+            <div class="list" id="next-steps-list"></div>
+          </section>
+        </section>
+
+        <section class="composer card" aria-label="Prompt composer">
+          <label class="label" for="prompt-input">Ask your question</label>
+          <textarea id="prompt-input" class="input textarea" rows="2" placeholder="Show me participation and completion by course"></textarea>
+          <div class="dropzone" id="dropzone" tabindex="0" role="button" aria-label="Attach CSV file">
+            <input id="file-input" type="file" accept=".csv,text/csv" hidden />
+            <span id="file-label">Drop a CSV file here or click to attach</span>
+          </div>
+          <div class="row between wrap-end">
+            <div class="row gap-sm wrap-end" id="file-chip-row"></div>
+            <div class="row gap-sm wrap-end">
+              <span class="badge" id="model-badge">Model: qwen-3.6-27b</span>
+              <button class="btn" id="rerun-btn">Re-run with different model</button>
+              <button class="btn btn-primary" id="send-btn">Send (Ctrl/Cmd+Enter)</button>
+            </div>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <dialog id="chart-modal" class="dialog" aria-label="Expanded chart"></dialog>
+    <dialog id="command-palette" class="dialog" aria-label="Command palette"></dialog>
+    <div id="toast-region" aria-live="polite" class="toast-region"></div>
+
+    <template id="insight-template">
+      <article class="insight-item">
+        <div class="row between"><span class="badge" data-role="severity"></span><span class="badge" data-role="confidence"></span></div>
+        <h3 data-role="title"></h3>
+        <p class="text-muted" data-role="detail"></p>
+        <div class="row gap-sm wrap-end">
+          <button class="btn btn-icon" data-action="pin" aria-label="Pin insight">☆</button>
+          <button class="btn btn-icon" data-action="copy" aria-label="Copy insight">⧉</button>
+        </div>
+      </article>
+    </template>
+
+    <script type="module" src="/static/js/app.js"></script>
+  </body>
+</html>

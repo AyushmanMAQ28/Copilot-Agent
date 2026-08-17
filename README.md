@@ -1,12 +1,15 @@
 # CSV Insights Agent
 
-CSV Insights Agent turns an uploaded CSV and a plain-language question into key insights, interactive visualizations, and actionable next steps. It uses an OpenAI-compatible language model when configured and otherwise remains fully usable through deterministic pandas analysis.
+CSV Insights Agent turns an uploaded CSV and a plain-language question into key insights, data visualizations, and actionable next steps.
 
-## Quick start
+The backend is FastAPI + pandas + SQLite. The frontend is plain HTML/CSS/vanilla JavaScript served directly by FastAPI (no npm, no build step).
 
-Run the backend and frontend in two terminals.
+## Prerequisites
 
-### Backend
+- Python 3.11+
+- No Node.js required
+
+## Quick start (single terminal)
 
 ```bash
 cd backend
@@ -17,50 +20,74 @@ cp .env.example .env
 uvicorn app.main:app --reload --port 8000
 ```
 
-On Windows PowerShell, activate the environment with `.\.venv\Scripts\Activate.ps1` and use `Copy-Item .env.example .env`. The API is available at <http://localhost:8000> and its documentation at <http://localhost:8000/docs>.
+Open <http://localhost:8000>.
 
-### Frontend
+On Windows PowerShell:
 
-```bash
-cd frontend
-cp .env.example .env.local
-npm install
-npm run dev
+```powershell
+cd backend
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+pip install -r requirements.txt
+Copy-Item .env.example .env
+uvicorn app.main:app --reload --port 8000
 ```
 
-Open <http://localhost:3000>. For production, run `npm run build` followed by `npm start`.
+## Frontend development
 
-The frontend intentionally uses only Next.js, React, TypeScript, Chart.js, and their type packages. This dependency-minimal setup supports restricted corporate npm environments.
+There is no frontend build pipeline.
+
+- Edit files under `backend/app/static/`
+- Refresh the browser
+
+## Project structure
+
+```text
+backend/
+  app/
+    analysis.py
+    config.py
+    main.py
+    static/
+      index.html
+      css/
+      js/
+      assets/
+  tests/
+sample_data/
+README.md
+```
+
+## Environment variables (`backend/.env`)
+
+| Name | Default | Description |
+| --- | --- | --- |
+| `LLM_API_KEY` | `sk-your-key-here` | Optional model API key. If missing, deterministic pandas analysis is used. |
+| `LLM_BASE_URL` | `https://llm.maqsoftware.net/v1` | OpenAI-compatible base URL. |
+| `LLM_MODEL` | `qwen-3.6-27b` | Model for generated insights/next steps. |
+| `DATABASE_PATH` | `data/insights.db` | SQLite path relative to `backend/`. |
+| `UPLOADS_DIR` | `uploads` | Upload directory relative to `backend/`. |
+| `CORS_ORIGINS` | `http://localhost:8000,http://127.0.0.1:8000` | Comma-separated allowed browser origins. |
 
 ## Try it out
 
-1. Choose `sample_data/learning_demo.csv`.
-2. Enter **Show me participation, completion, and assignment completion by course.**
-3. Select **Analyze**.
-4. Explore the three result panels. A next-step card runs a follow-up analysis using the same CSV.
+1. Upload `sample_data/learning_demo.csv`.
+2. Ask: **Show me participation, completion, and assignment completion by course.**
+3. Review the three-column workspace:
+   - Key Insights (left)
+   - Data Visualizations (center)
+   - Next Steps (right)
 
-## Environment variables
-
-### Backend (`backend/.env`)
-
-| Name | Default | Description |
-| --- | --- | --- |
-| `LLM_API_KEY` | `sk-your-key-here` | Optional language-model API key; the placeholder uses pandas analysis. |
-| `LLM_BASE_URL` | `https://llm.maqsoftware.net/v1` | Base URL for the OpenAI-compatible API. |
-| `LLM_MODEL` | `qwen-3.6-27b` | Model used for generated insights and next steps. |
-| `DATABASE_PATH` | `data/insights.db` | SQLite path relative to `backend/`. |
-| `UPLOADS_DIR` | `uploads` | Uploaded-file directory relative to `backend/`. |
-| `CORS_ORIGINS` | `http://localhost:5173` | Comma-separated browser origins allowed to call the API. |
-
-### Frontend (`frontend/.env.local`)
-
-| Name | Default | Description |
-| --- | --- | --- |
-| `NEXT_PUBLIC_API_BASE_URL` | `http://localhost:8000` | FastAPI URL used by the Next.js `/api` rewrite. |
-
-## Tests
+## Testing
 
 ```bash
-cd backend && pytest
-cd frontend && npm run typecheck && npm run build
+cd backend
+pytest
 ```
+
+## Troubleshooting
+
+- **Port already in use**: run `uvicorn app.main:app --reload --port 8001`.
+- **CSV rejected**: only `.csv` uploads are accepted.
+- **No LLM output**: check `LLM_API_KEY`; app automatically falls back to deterministic pandas analysis.
+- **UI changes not visible**: hard refresh browser (Ctrl/Cmd+Shift+R).
