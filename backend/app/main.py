@@ -120,9 +120,6 @@ def spa(full_path: str) -> Response:
     blocked_prefixes = ("api/", "docs", "openapi.json", "redoc", "static/")
     if full_path.startswith(blocked_prefixes):
         raise HTTPException(status_code=404, detail="Not found")
-    candidate = STATIC_DIR / full_path
-    if candidate.is_file():
-        return FileResponse(candidate)
     return FileResponse(
         STATIC_DIR / "index.html",
         headers={"Cache-Control": "no-store, max-age=0", "Pragma": "no-cache"},
